@@ -129,6 +129,52 @@ router.post('/verify-promotion-payment', auth, async (req, res) => {
   }
 });
 
+// Handle client-side only payment verification
+// This endpoint is used when we don't create an order on the server first
+router.post('/verify-promotion-payment-client', auth, async (req, res) => {
+  try {
+    const { razorpay_payment_id, productId } = req.body;
+    
+    if (!razorpay_payment_id || !productId) {
+      return res.status(400).json({ message: 'Missing required payment data' });
+    }
+    
+    console.log(`Processing client-side payment verification. Payment ID: ${razorpay_payment_id}, Product ID: ${productId}`);
+    
+    // Update the product with promotion details
+    const currentDate = new Date();
+    const promotionEndDate = new Date();
+    promotionEndDate.setDate(currentDate.getDate() + 30); // 30 days promotion
+    
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: productId, useremail: req.user.userEmail },
+      {
+        isPromoted: true,
+        promotionStartDate: currentDate,
+        promotionEndDate: promotionEndDate,
+        promotionPaymentId: razorpay_payment_id,
+        promotionOrderId: "client_side_payment" // Marker for client-side payments
+      },
+      { new: true }
+    );
+    
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Product not found or you do not own this product' });
+    }
+    
+    console.log(`Successfully updated product ${productId} with promotion details`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Product promotion successful',
+      product: updatedProduct
+    });
+  } catch (error) {
+    console.error('Error processing client-side payment:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Get promotion status for a product
 router.get('/promotion-status/:productId', auth, async (req, res) => {
   try {
